@@ -8,6 +8,8 @@
 
 -define(DEFAULT_SRC_DIR, "c_src").
 -define(DEFAULT_BUILD_DIR, "_build/cmake").
+%% 默认纳入变更检测的路径（相对 app dir）。
+-define(DEFAULT_WATCH_DIRS, ["CMakeLists.txt", "c_src"]).
 
 %% ===================================================================
 %% Public API
@@ -55,7 +57,59 @@ compile(AppInfo, _State) ->
       {ok, CMakeOpts1} -> CMakeOpts1;
       error -> []
     end,
-      
+
+  %% ---- 变更检测：无改动且产物存在时整段跳过 ----
+  case is_up_to_date(AppDir, CMakeOpts) of
+    true ->
+      rebar_api:info("CMake: sources unchanged, skipping build", []),
+      ok;
+    false ->
+      run_cmake_build(AppDir, CMakeOpts)
+  end.
+
+%% 判断是否可跳过整段编译。
+%% 条件：artifact 已配置 且 存在 且 所有受监控输入 mtime <= artifact mtime。
+%% 未配置 artifact 时返回 false（保守，走原流程），保证向后兼容。
+-spec is_up_to_date(file:filename(), proplists:proplist()) -> boolean().
+is_up_to_date(AppDir, CMakeOpts) ->
+  case artifact_path(AppDir, CMakeOpts) of
+    undefined ->
+      false;
+    Artifact ->
+      case filelib:last_modified(Artifact) of
+        0 ->
+          false;  %% 产物不存在
+        ArtifactMtime ->
+          WatchDirs = proplists:get_value(watch_dirs, CMakeOpts, ?DEFAULT_WATCH_DIRS),
+          Inputs = collect_input_mtimes(AppDir, WatchDirs),
+          NewestInput = lists:max([0 | Inputs]),
+          NewestInput =< ArtifactMtime
+      end
+  end.
+
+-spec artifact_path(file:filename(), proplists:proplist()) -> file:filename() | undefined.
+artifact_path(AppDir, CMakeOpts) ->
+  case proplists:get_value(artifact, CMakeOpts) of
+    undefined -> undefined;
+    Path -> filename:join([AppDir, Path])
+  end.
+
+%% 递归收集 watch_dirs 下所有普通文件的 mtime。
+%% 目录项递归展开；单文件项（如 CMakeLists.txt）直接取 mtime。
+-spec collect_input_mtimes(file:filename(), [string()]) -> [calendar:datetime()].
+collect_input_mtimes(AppDir, WatchDirs) ->
+  Files = lists:flatmap(
+    fun(Entry) ->
+        Abs = filename:join([AppDir, Entry]),
+        case filelib:is_dir(Abs) of
+          true  -> filelib:wildcard(filename:join([Abs, "**", "*"]));
+          false -> case filelib:is_file(Abs) of true -> [Abs]; false -> [] end
+        end
+    end, WatchDirs),
+  [filelib:last_modified(F) || F <- Files, filelib:is_regular(F)].
+
+-spec run_cmake_build(file:filename(), proplists:proplist()) -> ok.
+run_cmake_build(AppDir, CMakeOpts) ->
   SrcDir = filename:join([AppDir, proplists:get_value(c_src, CMakeOpts, ?DEFAULT_SRC_DIR)]),
   BuildDir = filename:join([AppDir, proplists:get_value(c_build, CMakeOpts, ?DEFAULT_BUILD_DIR)]),
   Variables = [[" -D", Key, "=", Value] || {Key, Value} <- proplists:get_value(variables, CMakeOpts, []),
@@ -69,7 +123,7 @@ compile(AppInfo, _State) ->
       rebar_api:error("~ts", [unicode:characters_to_list(CMakeError)]),
       rebar_api:abort();
     {ok, CMakeOutput} ->
-      rebar_api:info("Running CMake~n~ts", [unicode:characters_to_list(CMakeOutput)])        
+      rebar_api:info("Running CMake~n~ts", [unicode:characters_to_list(CMakeOutput)])
   end,
 
   case os:type() of
