@@ -60,6 +60,30 @@ The check is conservative: a missing artifact, an unset `artifact`, or any input
 newer than the artifact always triggers a rebuild. Only enabling `artifact`
 opts in; `watch_dirs` may be omitted to use the default.
 
+#### Per-platform artifact
+
+NIF/shared-library artifacts usually differ by OS (`.dll` / `.so` / `.dylib`).
+Instead of a flat path, `artifact` may be a proplist keyed by platform. The
+plugin selects the entry matching the current OS:
+
+```erlang
+{cmake_opts,
+ [...,
+  {artifact, [
+    {windows, "priv/kcp_nif.dll"},
+    {linux,   "priv/kcp_nif.so"},
+    {macos,   "priv/kcp_nif.dylib"},
+    %% Optional: used when none of the above match the current OS.
+    {default, "priv/kcp_nif.so"}
+  ]}
+]}.
+```
+
+Recognized keys: `windows`, `linux`, `macos`, and the optional `default`.
+If the proplist form is used and neither the current platform nor `default` is
+present, `artifact` is treated as unset (always build). The flat-string form
+remains supported and unchanged.
+
 Add a hook to automatically build C files and clean them afterwards:
 
 ```erlang

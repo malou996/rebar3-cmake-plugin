@@ -89,9 +89,41 @@ is_up_to_date(AppDir, CMakeOpts) ->
 
 -spec artifact_path(file:filename(), proplists:proplist()) -> file:filename() | undefined.
 artifact_path(AppDir, CMakeOpts) ->
-  case proplists:get_value(artifact, CMakeOpts) of
+  case resolve_artifact(proplists:get_value(artifact, CMakeOpts)) of
     undefined -> undefined;
     Path -> filename:join([AppDir, Path])
+  end.
+
+%% 解析 artifact 取值：支持三种形态
+%%   undefined        -> 未配置
+%%   字符串           -> 平铺路径（向后兼容）
+%%   [{Os, Path}...]  -> 按平台配置的 proplist，依当前 OS 选取
+-spec resolve_artifact(undefined | string() | proplists:proplist()) -> string() | undefined.
+resolve_artifact(undefined) -> undefined;
+resolve_artifact(Path) when is_list(Path) ->
+  case io_lib:printable_list(Path) of
+    true  -> Path;                       %% 平铺路径
+    false -> resolve_artifact_list(Path) %% 按平台配置的 proplist
+  end.
+
+%% 在按平台配置的 proplist 中选取当前平台的产物路径。
+%% 命中当前平台则用之，否则回退到可选的 {default, Path}；都没有则返回 undefined。
+-spec resolve_artifact_list(proplists:proplist()) -> string() | undefined.
+resolve_artifact_list(List) ->
+  case proplists:get_value(current_platform(), List) of
+    undefined -> proplists:get_value(default, List);
+    Path      -> Path
+  end.
+
+%% 将 os:type() 映射为友好的平台原子。
+%% windows/linux/macos 之外的系统返回 undefined，使 staleness gate 退化为始终构建（保守，向后兼容）。
+-spec current_platform() -> windows | linux | macos | undefined.
+current_platform() ->
+  case os:type() of
+    {win32, _}     -> windows;
+    {unix, linux}  -> linux;
+    {unix, darwin} -> macos;
+    _              -> undefined
   end.
 
 %% 递归收集 watch_dirs 下所有普通文件的 mtime。
