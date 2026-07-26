@@ -51,6 +51,7 @@ format_error(Reason) ->
 %% ===================================================================
 compile(AppInfo, _State) ->
   AppDir = rebar_app_info:dir(AppInfo),
+  AppName = rebar_app_info:name(AppInfo),
 
   Opts = rebar_app_info:opts(AppInfo),
   CMakeOpts = case dict:find(cmake_opts, Opts) of
@@ -61,7 +62,7 @@ compile(AppInfo, _State) ->
   %% ---- 变更检测：无改动且产物存在时整段跳过 ----
   case is_up_to_date(AppDir, CMakeOpts) of
     true ->
-      rebar_api:info("CMake: sources unchanged, skipping build", []),
+      rebar_api:info("CMake (~ts): sources unchanged, skipping build", [AppName]),
       ok;
     false ->
       run_cmake_build(AppDir, CMakeOpts)
