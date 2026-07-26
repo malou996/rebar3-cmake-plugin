@@ -116,14 +116,14 @@ resolve_artifact_list(List) ->
     Path      -> Path
   end.
 
-%% 将 os:type() 映射为友好的平台原子。
-%% windows/linux/macos 之外的系统返回 undefined，使 staleness gate 退化为始终构建（保守，向后兼容）。
--spec current_platform() -> windows | linux | macos | undefined.
+%% 将 os:type() 映射为平台原子，命名与 os:type() 一致。
+%% win32/linux/darwin 之外的系统返回 undefined，使 staleness gate 退化为始终构建（保守，向后兼容）。
+-spec current_platform() -> win32 | linux | darwin | undefined.
 current_platform() ->
   case os:type() of
-    {win32, _}     -> windows;
+    {win32, _}     -> win32;
     {unix, linux}  -> linux;
-    {unix, darwin} -> macos;
+    {unix, darwin} -> darwin;
     _              -> undefined
   end.
 

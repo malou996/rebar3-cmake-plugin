@@ -70,16 +70,16 @@ plugin selects the entry matching the current OS:
 {cmake_opts,
  [...,
   {artifact, [
-    {windows, "priv/kcp_nif.dll"},
-    {linux,   "priv/kcp_nif.so"},
-    {macos,   "priv/kcp_nif.dylib"},
+    {win32,  "priv/kcp_nif.dll"},
+    {linux,  "priv/kcp_nif.so"},
+    {darwin, "priv/kcp_nif.dylib"},
     %% Optional: used when none of the above match the current OS.
     {default, "priv/kcp_nif.so"}
   ]}
 ]}.
 ```
 
-Recognized keys: `windows`, `linux`, `macos`, and the optional `default`.
+Recognized keys: `win32`, `linux`, `darwin`, and the optional `default`.
 If the proplist form is used and neither the current platform nor `default` is
 present, `artifact` is treated as unset (always build). The flat-string form
 remains supported and unchanged.
